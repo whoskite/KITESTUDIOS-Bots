@@ -34,6 +34,9 @@ class DiscordRSSBot:
         # Limit posts per feed per check to prevent spam
         self.max_posts_per_feed = int(os.getenv('MAX_POSTS_PER_FEED', 2))
         
+        # Enable content validation to skip problematic articles
+        self.enable_validation = os.getenv('ENABLE_CONTENT_VALIDATION', 'true').lower() == 'true'
+        
         # Initialize Anthropic
         self.client = anthropic.Anthropic(
             api_key=os.getenv('ANTHROPIC_API_KEY')
@@ -210,12 +213,29 @@ class DiscordRSSBot:
                         elif hasattr(item, 'summary') and item.summary:
                             content = item.summary
                         
+                        # Validate content before processing (if enabled)
+                        if self.enable_validation:
+                            is_valid, validation_reason = await self.validate_content(
+                                item.title, 
+                                content, 
+                                item.link
+                            )
+                            
+                            if not is_valid:
+                                logger.info(f"Skipping article '{item.title}' - {validation_reason}")
+                                continue
+                        
                         # Process with AI
                         ai_message = await self.process_with_ai(
                             item.title, 
                             content, 
                             item.link
                         )
+                        
+                        # Additional check: if AI returns an apology or error message, skip it
+                        if self.is_error_message(ai_message):
+                            logger.info(f"Skipping article '{item.title}' - AI returned error message")
+                            continue
                         
                         # Send to Discord
                         await self.send_to_discord(ai_message)
@@ -241,6 +261,61 @@ class DiscordRSSBot:
         await self.bot.wait_until_ready()
         # Override the loop interval
         self.rss_checker.change_interval(minutes=self.check_interval)
+    
+    async def validate_content(self, title: str, content: str, link: str) -> tuple[bool, str]:
+        """Validate if content is suitable for processing"""
+        try:
+            validation_prompt = f"""
+            Analyze this RSS article and determine if it's suitable for creating a Discord post.
+            
+            Return ONLY one of these responses:
+            - "VALID" if the article has real content and can be processed
+            - "SKIP_FUTURE_DATE" if the article has a future date
+            - "SKIP_NO_CONTENT" if there's no meaningful content
+            - "SKIP_BROKEN_LINK" if the link appears broken or inaccessible
+            - "SKIP_INVALID" if the content is malformed or problematic
+            
+            Article Title: {title}
+            Article Content: {content[:500]}
+            Link: {link}
+            """
+            
+            response = self.client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=50,
+                temperature=0.1,
+                messages=[{"role": "user", "content": validation_prompt}]
+            )
+            
+            result = response.content[0].text.strip()
+            
+            if result == "VALID":
+                return True, "Content is valid for processing"
+            else:
+                return False, result
+                
+        except Exception as e:
+            logger.error(f"Error validating content: {e}")
+            # If validation fails, assume content is valid to avoid blocking good content
+            return True, "Validation failed, proceeding with processing"
+    
+    def is_error_message(self, message: str) -> bool:
+        """Check if AI response contains error/apology messages"""
+        error_indicators = [
+            "I apologize",
+            "I cannot access",
+            "I notice the provided",
+            "future date",
+            "cannot accurately transform",
+            "without the actual article content",
+            "I'm unable to",
+            "I don't have access",
+            "appears to be from a future",
+            "I cannot provide"
+        ]
+        
+        message_lower = message.lower()
+        return any(indicator.lower() in message_lower for indicator in error_indicators)
     
     def run(self):
         """Start the bot"""

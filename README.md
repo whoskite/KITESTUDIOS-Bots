@@ -11,6 +11,7 @@ A Discord bot that automatically monitors multiple RSS feeds and uses Claude 3.5
 - 📡 **Multi-Feed Support**: Monitor multiple RSS feeds simultaneously
 - 🚫 **Spam Prevention**: Limits posts per feed to ensure balanced content
 - 🔄 **Duplicate Prevention**: Tracks processed posts to avoid repeating content
+- 🔍 **Content Validation**: AI-powered filtering to skip problematic articles
 - ⚡ **Real-time Posting**: Instantly posts new content to your Discord channel
 - 🛡️ **Error Handling**: Robust error handling with comprehensive logging
 - ⚙️ **Configurable**: Easy configuration via environment variables
@@ -40,6 +41,7 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 RSS_FEED_URL=https://every.to/feeds/fe85842ddccec3a4c0f4.xml, https://fs.blog/feed/, https://dailystoic.com/feed/
 CHECK_INTERVAL_MINUTES=60
 MAX_POSTS_PER_FEED=2
+ENABLE_CONTENT_VALIDATION=true
 ```
 
 ### 3. Get Required Tokens
@@ -72,14 +74,15 @@ python discord_rss_bot.py
 1. **Multi-Feed Monitoring**: Bot checks all configured RSS feeds every hour (configurable)
 2. **Loop Prevention**: Tracks last check time per feed to prevent reprocessing if bot restarts
 3. **New Post Detection**: Compares against previously processed posts across all feeds
-4. **Spam Prevention**: Limits posts per feed to ensure balanced content distribution
-5. **Advanced AI Processing**: Uses Claude 3.5 Sonnet to create structured, educational content:
+4. **Content Validation**: AI analyzes articles to skip problematic content (future dates, broken links, etc.)
+5. **Spam Prevention**: Limits posts per feed to ensure balanced content distribution
+6. **Advanced AI Processing**: Uses Claude 3.5 Sonnet to create structured, educational content:
    - 🎯 **Punchy Headlines**: Benefit-focused titles under 60 characters
    - 🧠 **Simple Explanations**: Feynman technique for complex concepts
    - ⚡ **Quick Wins**: 2-3 actionable tips with action verbs
    - 📝 **TL;DR**: One-sentence key insight summary
-6. **Discord Posting**: Sends formatted messages to your channel with 2-second delays
-7. **Tracking**: Saves processed post IDs and check times to avoid duplicates
+7. **Discord Posting**: Sends formatted messages to your channel with 2-second delays
+8. **Tracking**: Saves processed post IDs and check times to avoid duplicates
 
 ## Configuration
 
@@ -91,6 +94,7 @@ python discord_rss_bot.py
 - `RSS_FEED_URL`: Comma-separated list of RSS feed URLs to monitor
 - `CHECK_INTERVAL_MINUTES`: How often to check for new posts (default: 60)
 - `MAX_POSTS_PER_FEED`: Maximum posts per feed per check cycle (default: 2)
+- `ENABLE_CONTENT_VALIDATION`: Enable AI validation to skip problematic articles (default: true)
 
 ### Multi-Feed Configuration
 
@@ -129,6 +133,18 @@ Control content volume with `MAX_POSTS_PER_FEED`:
 }
 ```
 
+### Content Validation
+
+Control content quality with `ENABLE_CONTENT_VALIDATION`:
+- `true`: AI validates articles before processing (recommended)
+- `false`: Process all articles without validation
+
+**Validation checks for:**
+- Future dates in articles
+- Broken or inaccessible links
+- Empty or malformed content
+- AI processing errors
+
 ## Message Format
 
 The bot creates structured Discord messages with:
@@ -158,6 +174,7 @@ The bot creates structured Discord messages with:
 4. **RSS parsing errors**: Verify RSS feed URLs are accessible
 5. **Too many posts**: Reduce `MAX_POSTS_PER_FEED` value
 6. **Duplicate posts**: Check if `processed_posts.json` exists and is readable
+7. **Articles being skipped**: Check validation logs or disable `ENABLE_CONTENT_VALIDATION`
 
 ### Logs
 
@@ -166,6 +183,8 @@ The bot logs all activities to console. Look for:
 - `Processing feed: [URL]`
 - `Skipping [URL] - already checked X.X minutes ago`
 - `Found X new posts for [URL]`
+- `Skipping article 'Title' - SKIP_FUTURE_DATE` (or other validation reasons)
+- `Skipping article 'Title' - AI returned error message`
 - `Limited to X posts for [URL] to prevent spam`
 - `Message sent to Discord successfully`
 
@@ -248,4 +267,4 @@ High-quality feeds that work well with this bot:
 
 ## License
 
-This project is open source and available under the MIT License. 
+This project is open source and available under the MIT License.
